@@ -6,10 +6,10 @@ from utils import AudioHandler
 MODEL_ID = os.getenv("DUKEBOT_MODEL", "qwen3.5:4b")
 OLLAMA_BASE = os.getenv("OLLAMA_BASE", "http://localhost:11434")
 
-class DukeBot:
+class Computah:
 
     def __init__(self):
-        print("Initializing DukeBot...")
+        print("Initializing Computah...")
         # Initialize the model
         self.model = LiteLLMModel(
             model_id=f"ollama_chat/{MODEL_ID}",
@@ -18,7 +18,7 @@ class DukeBot:
         )
         # Initialize the audio handler
         self.audio_handler = AudioHandler()
-        print("DukeBot initialized!")
+        print("Computah initialized!")
 
     def listen(self) -> str:
         print("Listening for audio...")
