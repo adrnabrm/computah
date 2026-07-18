@@ -1,12 +1,16 @@
 import faster_whisper
 import sounddevice as sd
+import soundfile as sf
 import wavio
 import numpy as np
 import asyncio
 import os
+import wave
 from livekit.wakeword import WakeWordModel, WakeWordListener
+from piper import PiperVoice
 
 WAKEWORD_MODEL_PATH = os.getenv("WAKEWORD_MODEL_PATH", None)
+PIPER_VOICE_PATH = os.getenv("PIPER_VOICE_PATH", None)
 
 class AudioHandler:
     def __init__(self):
@@ -15,8 +19,13 @@ class AudioHandler:
             self.wakeword_model = WakeWordModel(models=[WAKEWORD_MODEL_PATH])
         else:
             raise ValueError("WAKEWORD_MODEL_PATH is not set")
+        
+        if PIPER_VOICE_PATH:
+            self.voice = PiperVoice.load(PIPER_VOICE_PATH)
+        else:
+            raise ValueError("PIPER_VOICE_PATH is not set")
 
-    def capture_audio(self):
+    def capture_audio(self) -> str:
         """Capture audio from the user and transcribe it."""
         try:
             filename = self._record_audio()
@@ -27,7 +36,7 @@ class AudioHandler:
         transcript = self._transcribe_audio(filename)
         return transcript
     
-    def listen_for_wakeword(self):
+    def listen_for_wakeword(self) -> bool:
         """Listen for the wakeword and return True if detected, False otherwise."""
         async def _listen_for_wakeword():
             async with WakeWordListener(self.wakeword_model, threshold=0.1) as listener:
@@ -35,8 +44,18 @@ class AudioHandler:
                 return await listener.wait_for_detection()
             
         return asyncio.run(_listen_for_wakeword())
+    
+    def speak(self, input: str) -> None:
+        """Speak the input to the user."""
+        with wave.open("output.wav", "wb") as wav_file:
+            self.voice.synthesize_wav(input, wav_file)
+        
+        data, fs = sf.read("output.wav", dtype="float32")
+        print(input)
+        sd.play(data, fs)
+        sd.wait()
 
-    def _transcribe_audio(self, filename: str):
+    def _transcribe_audio(self, filename: str) -> str:
         """Transcribe the audio file and return the transcript."""
         segments, _ = self.model.transcribe(filename)
         return " ".join([s.text for s in segments])
@@ -48,7 +67,7 @@ class AudioHandler:
         max_seconds: int = 30,
         silence_seconds: float = 1.0,
         threshold: float = 500,  # int16 RMS; tune this
-    ):
+    ) -> str:
         """Record user audio with silence detection done by measuring volume of each chunk of the streamed audio."""
         chunk = int(0.1 * fs)  # 100ms frames
         silence_chunks_needed = int(silence_seconds / 0.1)
