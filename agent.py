@@ -71,6 +71,7 @@ class Computah:
         return self.audio_handler.capture_audio()
 
     def _query_model(self, input: str) -> str:
+        """Query the model with the user input and return the response."""
         messages = [
             ChatMessage(
                 role=MessageRole.SYSTEM,
