@@ -1,13 +1,14 @@
 # Computah
 
-Computah, make this repo supa cool and awesome.
+Local voice assistant. Wake word → listen → reply → remember.
 
 ## Stack
 
-- **Wake word:** [livekit-wakeword](https://github.com/livekit/agents) (`computah.onnx`)
+- **Wake word:** livekit-wakeword (`computah.onnx`)
 - **STT:** faster-whisper (`tiny`)
 - **LLM:** Ollama via smolagents / LiteLLM (default `qwen3.5:4b`)
 - **TTS:** Piper (`en_US-lessac-medium`)
+- **Memory:** short-term chat history across turns
 
 ## Setup
 
@@ -23,8 +24,6 @@ Install and run [Ollama](https://ollama.com/), then pull the model:
 ollama pull qwen3.5:4b
 ```
 
-Copy env and fill in paths:
-
 ```bash
 cp .env.example .env
 ```
@@ -36,7 +35,7 @@ WAKEWORD_MODEL_PATH=models/wakeword/computah.onnx
 PIPER_VOICE_PATH=models/tts/en_US-lessac-medium.onnx
 ```
 
-Load env before running (e.g. `export $(grep -v '^#' .env | xargs)` or your preferred method).
+Load env before running (`export $(grep -v '^#' .env | xargs)` or similar).
 
 ## Run
 
@@ -44,21 +43,17 @@ Load env before running (e.g. `export $(grep -v '^#' .env | xargs)` or your pref
 python main.py
 ```
 
-Flow:
+Ctrl+C to quit.
 
-1. Listens for the wake word
-2. Records until silence
-3. Transcribes with Whisper
-4. Queries the Ollama model
-5. Speaks the reply with Piper
+Loop: wake word → record → Whisper → Ollama (with chat memory) → Piper → repeat.
 
 ## Wake word training
 
-Optional. Config lives in `scripts/wakeword/configs/prod.yaml`.
+Optional. Config: `scripts/wakeword/configs/prod.yaml`.
 
 ```bash
 cd scripts/wakeword
 python train.py
 ```
 
-Exports ONNX under `models/wakeword/`. Point `WAKEWORD_MODEL_PATH` at the new file.
+Exports ONNX under `models/wakeword/`. Point `WAKEWORD_MODEL_PATH` at it.

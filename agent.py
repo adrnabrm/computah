@@ -2,6 +2,7 @@ import os
 from smolagents import ChatMessage, LiteLLMModel
 from smolagents.models import MessageRole
 from utils.audio_handler import AudioHandler
+from utils.memory import Memory
 
 MODEL_ID = os.getenv("COMPUTAH_MODEL", "qwen3.5:4b")
 OLLAMA_BASE = os.getenv("OLLAMA_BASE", "http://localhost:11434")
@@ -25,23 +26,33 @@ class Computah:
             num_ctx=8192,
             max_tokens=256,
         )
+        # Initialize the memory
+        self.memory = Memory()
         # Initialize the audio handler
         self.audio_handler = AudioHandler()
         print("Computah initialized!")
 
     def run(self) -> None:
         print("Starting Computah...")
+        while True:
+            try:
+                self._listen_for_wakeword()
 
-        self._listen_for_wakeword()
+                user_query_transcript = self._capture_user_audio()
+                if user_query_transcript:
+                    print(f"User said: {user_query_transcript}")
+                    response = self._query_model(user_query_transcript)
+                else:
+                    raise Exception("No user query transcript captured!")
 
-        user_query_transcript = self._capture_user_audio()
-        if user_query_transcript:
-            print(f"User said: {user_query_transcript}")
-            response = self._query_model(user_query_transcript)
-        else:
-            raise Exception("No user query transcript captured!")
-
-        self._speak(response)
+                self._speak(response)
+                self.memory.add(user_query_transcript, response)
+            except KeyboardInterrupt:
+                print("Computah shutting down...")
+                break
+            except Exception as e:
+                print(f"Error: {e}")
+                continue
 
     def _speak(self, input: str) -> None:
         """Speak the response to the user."""
@@ -60,14 +71,17 @@ class Computah:
         return self.audio_handler.capture_audio()
 
     def _query_model(self, input: str) -> str:
-        response = self.model.generate([
+        """Query the model with the user input and return the response."""
+        messages = [
             ChatMessage(
                 role=MessageRole.SYSTEM,
                 content=[{"type": "text", "text": SYSTEM_PROMPT}],
             ),
+            *self.memory.get(),
             ChatMessage(
                 role=MessageRole.USER,
                 content=[{"type": "text", "text": input}],
             ),
-        ])
+        ]
+        response = self.model.generate(messages)
         return response.content
