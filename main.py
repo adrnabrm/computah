@@ -2,7 +2,8 @@ from agent import Computah
 
 def main():
     bot = Computah()
-    bot.listen()
+    response = bot.run()
+    print(response)
 
 if __name__ == "__main__":
     main()

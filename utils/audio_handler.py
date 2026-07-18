@@ -28,13 +28,16 @@ class AudioHandler:
         return transcript
     
     def listen_for_wakeword(self):
+        """Listen for the wakeword and return True if detected, False otherwise."""
         async def _listen_for_wakeword():
             async with WakeWordListener(self.wakeword_model, threshold=0.1) as listener:
+                print("Listening for wakeword...")
                 return await listener.wait_for_detection()
             
         return asyncio.run(_listen_for_wakeword())
 
     def _transcribe_audio(self, filename: str):
+        """Transcribe the audio file and return the transcript."""
         segments, _ = self.model.transcribe(filename)
         return " ".join([s.text for s in segments])
 
