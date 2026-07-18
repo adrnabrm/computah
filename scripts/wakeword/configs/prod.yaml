@@ -1,0 +1,11 @@
+model_name: computah
+target_phrases:
+  - "computahh"
+  - "computa"
+
+n_samples: 10000 # training samples per class
+model:
+  model_type: conv_attention # conv_attention, dnn, or rnn
+  model_size: tiny # tiny, small, medium, large
+steps: 50000
+target_fp_per_hour: 0.2
