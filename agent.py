@@ -31,13 +31,21 @@ class Computah:
 
     def run(self) -> None:
         print("Starting Computah...")
+
         self._listen_for_wakeword()
+
         user_query_transcript = self._capture_user_audio()
         if user_query_transcript:
             print(f"User said: {user_query_transcript}")
-            return self._query_model(user_query_transcript)
+            response = self._query_model(user_query_transcript)
         else:
             raise Exception("No user query transcript captured!")
+
+        self._speak(response)
+
+    def _speak(self, input: str) -> None:
+        """Speak the response to the user."""
+        self.audio_handler.speak(input)
 
     def _listen_for_wakeword(self) -> bool:
         """Listen for the wakeword and return True if detected, False otherwise."""
