@@ -5,6 +5,14 @@ from utils.audio_handler import AudioHandler
 
 MODEL_ID = os.getenv("COMPUTAH_MODEL", "qwen3.5:4b")
 OLLAMA_BASE = os.getenv("OLLAMA_BASE", "http://localhost:11434")
+SYSTEM_PROMPT = """
+You are a voice assistant tasked with answering questions and/or performing tasks whether or not tools are available to you.
+You will receive a transcript of the user's query and you will need to respond following these strict rules that are unbreakable:
+- Respond in a conversational style.
+- Limit your response to 2-4 sentences.
+- Do not use any other characters other than plain text alphabet letters, numbers, and punctuation. 
+- No markdown, no code blocks, no bullet points, no tables, no URLS, or any formatting that is other than plain text conversation.
+"""
 
 class Computah:
 
@@ -45,6 +53,10 @@ class Computah:
 
     def _query_model(self, input: str) -> str:
         response = self.model.generate([
+            ChatMessage(
+                role=MessageRole.SYSTEM,
+                content=[{"type": "text", "text": SYSTEM_PROMPT}],
+            ),
             ChatMessage(
                 role=MessageRole.USER,
                 content=[{"type": "text", "text": input}],
