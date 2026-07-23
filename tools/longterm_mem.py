@@ -1,6 +1,5 @@
 """
-# TODO: 
-- add forget tool, ensure guardrails are in place, eg verify with user before forgetting
+# TODO:
 - add duplicate detection when remembering, eg if user says "I have a cat named Fluffy" and then "I have a cat named Fluffy", don't remember the second one
 - add a way to remove all memories (not as tool to be executed but as a feature of the memory class)
 """
@@ -14,7 +13,10 @@ from chromadb.utils.embedding_functions import GoogleGeminiEmbeddingFunction
 
 class LongTermMemoryMessage(str, Enum):
     SAVED = "Saved."
+    FORGOTTEN = "Forgotten."
+    CANCELLED = "Cancelled. Nothing was forgotten."
     NO_MEMORIES = "No memories found."
+    NOT_FOUND = "Memory not found. Nothing was forgotten."
 
 REMEMBER_TOOL = {
     "type": "function",
@@ -45,6 +47,24 @@ RECALL_TOOL = {
                 "query": {
                     "type": "string",
                     "description": "Short search query for the memory to find",
+                }
+            },
+            "required": ["query"],
+        },
+    },
+}
+
+FORGET_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "forget",
+        "description": "Delete one saved long-term memory that matches the query. Use when the user asks to forget or remove a fact.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "What fact to delete, phrased like a stored memory or recall query (e.g. 'user's name', 'The user's dog is named Duke'). Not a single word unless that is the whole fact.",
                 }
             },
             "required": ["query"],
@@ -100,3 +120,23 @@ class LongTermMemory:
         if not kept:
             return LongTermMemoryMessage.NO_MEMORIES.value
         return "\n".join(kept)
+
+    def find_closest(self, query: str) -> tuple[str, str] | None:
+        """Return (id, doc) for the closest memory under the threshold, else None."""
+        if self.collection.count() == 0:
+            return None
+
+        result = self.collection.query(query_texts=[query], n_results=1)
+        doc = result["documents"][0][0]
+        distance = result["distances"][0][0]
+        memory_id = result["ids"][0][0]
+
+        if self._verbose:
+            print(f"find_closest query={query!r} doc={doc!r} distance={distance}")
+
+        if distance >= self.confidence_threshold:
+            return None
+        return memory_id, doc
+
+    def delete(self, memory_id: str) -> None:
+        self.collection.delete(ids=[memory_id])

@@ -4,7 +4,13 @@ import os
 from smolagents import ChatMessage, LiteLLMModel
 from smolagents.models import MessageRole
 
-from tools.longterm_mem import RECALL_TOOL, REMEMBER_TOOL, LongTermMemory
+from tools.longterm_mem import (
+    FORGET_TOOL,
+    RECALL_TOOL,
+    REMEMBER_TOOL,
+    LongTermMemory,
+    LongTermMemoryMessage,
+)
 from tools.web_search import WEB_SEARCH_TOOL, web_search
 from utils.audio_handler import AudioHandler
 from utils.memory import Memory
@@ -21,6 +27,7 @@ Tools:
 - Use web_search only for live or external facts you cannot know from memory (weather, news, scores, current events).
 - Use remember to save durable facts (names, preferences, people, ongoing projects). One clear sentence as "The user ...". Not every turn.
 - Use recall when the answer may live in saved long-term memory and conversation history is not enough.
+- Use forget when the user asks to forget or remove a saved fact. Query the kind of fact (e.g. "user's name"), not just a name or keyword.
 - Do not use tools to recall what the user just said or what you already answered.
 - Do not use tools for general knowledge or everyday how-tos unless the user asks for something current from the web.
 - Only state facts from tools or history. Do not invent details.
@@ -50,11 +57,12 @@ class Computah:
             self.long_term = LongTermMemory(path=LONG_TERM_MEMORY_PATH, verbose=True)
 
             # Initialize the tools
-            self.tools = [WEB_SEARCH_TOOL, REMEMBER_TOOL, RECALL_TOOL]
+            self.tools = [WEB_SEARCH_TOOL, REMEMBER_TOOL, RECALL_TOOL, FORGET_TOOL]
             self.tool_fns = {
                 "web_search": web_search,
                 "remember": self.long_term.remember,
                 "recall": self.long_term.recall,
+                "forget": self._forget,
             }
             self.max_tool_rounds = 3
 
@@ -102,6 +110,23 @@ class Computah:
         """Capture audio from the user and transcribe it."""
         print("Capturing user audio...")
         return self.audio_handler.capture_audio()
+
+    def _forget(self, query: str) -> str:
+        """Find a memory, confirm by voice, then delete if the user says yes."""
+        match = self.long_term.find_closest(query)
+        if not match:
+            return LongTermMemoryMessage.NOT_FOUND.value
+
+        memory_id, doc = match
+        self._speak(f"Are you sure you want to delete this memory: {doc}")
+        answer = (self._capture_user_audio() or "").strip().lower().strip(".,!?")
+        print(f"Forget confirm answer: {answer!r}")
+
+        if not (answer.startswith("yes") or answer in ("yeah", "yep", "yup", "sure", "ok", "okay")):
+            return LongTermMemoryMessage.CANCELLED.value
+
+        self.long_term.delete(memory_id)
+        return LongTermMemoryMessage.FORGOTTEN.value
 
     def _query_model(self, input: str) -> str:
         """Query the model with the user input and return the response."""
