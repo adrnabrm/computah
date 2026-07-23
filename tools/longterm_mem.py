@@ -1,3 +1,10 @@
+"""
+# TODO: 
+- add forget tool, ensure guardrails are in place, eg verify with user before forgetting
+- add duplicate detection when remembering, eg if user says "I have a cat named Fluffy" and then "I have a cat named Fluffy", don't remember the second one
+- add a way to remove all memories (not as tool to be executed but as a feature of the memory class)
+"""
+
 import uuid
 from enum import Enum
 from pathlib import Path
