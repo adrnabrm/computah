@@ -1,12 +1,13 @@
 # Computah
 
-Local voice assistant. Wake word → listen → reply → remember.
+Voice assistant. Wake word → listen → reply → remember. Can web search when needed.
 
 ## Stack
 
 - **Wake word:** livekit-wakeword (`computah.onnx`)
 - **STT:** faster-whisper (`tiny`)
-- **LLM:** Ollama via smolagents / LiteLLM (default `qwen3.5:4b`)
+- **LLM:** Gemini via smolagents / LiteLLM (`gemini-3.1-flash-lite`)
+- **Tools:** DuckDuckGo web search
 - **TTS:** Piper (`en_US-lessac-medium`)
 - **Memory:** short-term chat history across turns
 
@@ -16,26 +17,16 @@ Local voice assistant. Wake word → listen → reply → remember.
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-Install and run [Ollama](https://ollama.com/), then pull the model:
-
-```bash
-ollama pull qwen3.5:4b
-```
-
-```bash
 cp .env.example .env
 ```
 
 ```env
-COMPUTAH_MODEL=qwen3.5:4b
-OLLAMA_BASE=http://localhost:11434
+GEMINI_API_KEY=your_key_here
 WAKEWORD_MODEL_PATH=models/wakeword/computah.onnx
 PIPER_VOICE_PATH=models/tts/en_US-lessac-medium.onnx
 ```
 
-Load env before running (`export $(grep -v '^#' .env | xargs)` or similar).
+Get a key from [Google AI Studio](https://aistudio.google.com/apikey). Load env before running (`export $(grep -v '^#' .env | xargs)` or similar).
 
 ## Run
 
@@ -45,7 +36,7 @@ python main.py
 
 Ctrl+C to quit.
 
-Loop: wake word → record → Whisper → Ollama (with chat memory) → Piper → repeat.
+Loop: wake word → record → Whisper → Gemini (memory + optional web search) → Piper → repeat.
 
 ## Wake word training
 
