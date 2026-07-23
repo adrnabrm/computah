@@ -1,18 +1,28 @@
+import json
 import os
+
 from smolagents import ChatMessage, LiteLLMModel
 from smolagents.models import MessageRole
+
+from tools.web_search import WEB_SEARCH_TOOL, WebSearchStatus, web_search
 from utils.audio_handler import AudioHandler
 from utils.memory import Memory
 
 MODEL_ID = os.getenv("COMPUTAH_MODEL", "qwen3.5:4b")
 OLLAMA_BASE = os.getenv("OLLAMA_BASE", "http://localhost:11434")
 SYSTEM_PROMPT = """
-You are a voice assistant tasked with answering questions and/or performing tasks whether or not tools are available to you.
-You will receive a transcript of the user's query and you will need to respond following these strict rules that are unbreakable:
-- Respond in a conversational style.
-- Limit your response to 2-4 sentences.
-- Do not use any other characters other than plain text alphabet letters, numbers, and punctuation. 
-- No markdown, no code blocks, no bullet points, no tables, no URLS, or any formatting that is other than plain text conversation.
+You are a voice assistant. Answer the user's latest question using conversation history when it is enough.
+
+Tools:
+- Use web_search only for live or external facts you cannot know from memory (weather, news, scores, current events).
+- Do not use tools to recall what the user just said or what you already answered.
+- Do not use tools for general knowledge or everyday how-tos unless the user asks for something current from the web.
+- Answer only the latest user question. Do not mix in older topics unless they ask about them.
+
+Response style (unbreakable):
+- Conversational, 2-4 sentences.
+- Plain text only: letters, numbers, and punctuation.
+- No markdown, code blocks, bullet points, tables, or URLs.
 """
 
 class Computah:
@@ -26,6 +36,11 @@ class Computah:
             num_ctx=8192,
             max_tokens=256,
         )
+        # Initialize the tools
+        self.tools = [WEB_SEARCH_TOOL]
+        self.tool_fns = {"web_search": web_search}
+        self.max_tool_rounds = 3
+
         # Initialize the memory
         self.memory = Memory()
         # Initialize the audio handler
@@ -83,5 +98,45 @@ class Computah:
                 content=[{"type": "text", "text": input}],
             ),
         ]
+        for _ in range(self.max_tool_rounds):
+            response = self.model.generate(
+                messages,
+                tools=self.tools,
+                tool_choice="auto",
+            )
+            # Model answered without tools
+            if not response.tool_calls:
+                return response.content or ""
+
+            success = False
+            for tool_call in response.tool_calls:
+                name = tool_call.function.name
+                args = tool_call.function.arguments
+                print(f"Tool call: {name} with arguments: {args}")
+                self._speak(f"Using tool {name}")
+
+                if isinstance(args, str):
+                    args = json.loads(args) if args else {}
+                try:
+                    result = self.tool_fns[name](**args)
+                    success = result != WebSearchStatus.NO_RESULTS
+                except Exception as e:
+                    print(f"Error using tool {name}: {e}")
+                    result = f"Error using tool {name}: {e}"
+
+                messages.append(
+                    ChatMessage(
+                        role=MessageRole.USER,
+                        content=[{"type": "text", "text": f"Tool result ({name}):\n{result}"}],
+                    )
+                )
+                # First good result is enough — go answer
+                if success:
+                    break
+
+            if success:
+                break
+
+        # Final reply from whatever we have (tool results or exhausted retries)
         response = self.model.generate(messages)
-        return response.content
+        return response.content or ""
