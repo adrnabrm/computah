@@ -10,6 +10,7 @@ from utils.memory import Memory
 
 MODEL_ID = os.getenv("COMPUTAH_MODEL", "qwen3.5:4b")
 OLLAMA_BASE = os.getenv("OLLAMA_BASE", "http://localhost:11434")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 SYSTEM_PROMPT = """
 You are a voice assistant. Answer the user's latest question using conversation history when it is enough.
 
@@ -30,21 +31,25 @@ class Computah:
     def __init__(self):
         print("Initializing Computah...")
         # Initialize the model
-        self.model = LiteLLMModel(
-            model_id=f"ollama_chat/{MODEL_ID}",
-            api_base=OLLAMA_BASE,
-            num_ctx=8192,
-            max_tokens=256,
-        )
-        # Initialize the tools
-        self.tools = [WEB_SEARCH_TOOL]
-        self.tool_fns = {"web_search": web_search}
-        self.max_tool_rounds = 3
+        try:
+            self.model = LiteLLMModel(
+                model_id="gemini/gemini-3.1-flash-lite",
+                api_key=GEMINI_API_KEY,
+                num_ctx=8192,
+                max_tokens=256,
+            )
+            # Initialize the tools
+            self.tools = [WEB_SEARCH_TOOL]
+            self.tool_fns = {"web_search": web_search}
+            self.max_tool_rounds = 3
 
-        # Initialize the memory
-        self.memory = Memory()
-        # Initialize the audio handler
-        self.audio_handler = AudioHandler()
+            # Initialize the memory
+            self.memory = Memory()
+            # Initialize the audio handler
+            self.audio_handler = AudioHandler()
+        except Exception as e:
+            print(f"Error initializing model: {e}")
+            raise e
         print("Computah initialized!")
 
     def run(self) -> None:
