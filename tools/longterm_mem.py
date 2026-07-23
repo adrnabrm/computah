@@ -26,7 +26,7 @@ REMEMBER_TOOL = {
             "properties": {
                 "text": {
                     "type": "string",
-                    "description": "One clear sentence to store as a long-term memory",
+                    "description": "One clear sentence about the user to store, written as 'The user ...'",
                 }
             },
             "required": ["text"],
