@@ -101,7 +101,7 @@ class LongTermMemory:
         self,
         path: str,
         verbose: bool = False,
-        confidence_threshold: float = 0.6,
+        confidence_threshold: float = 0.35,
         duplicate_threshold: float = 0.2,
     ):
         """ Initialize the long term memory. """
