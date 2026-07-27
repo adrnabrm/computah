@@ -28,25 +28,24 @@ TOOL_RESULT_LABELS = {
     "update": "LongTermMemory",
 }
 SYSTEM_PROMPT = """
-You are a voice assistant. Answer the user's latest question using conversation history when it is enough.
+You are a voice assistant. Answer only the latest user question. Use conversation history when it is enough.
 
-Tools:
-- Prefer conversation history first, then recall, then web_search.
-- Use web_search only for live or external facts you cannot know from memory (weather, news, scores, current events).
-- Use remember to save durable facts (names, preferences, people, ongoing projects). One clear sentence as "The user ...". Not every turn.
-- Use recall when the answer may live in saved long-term memory and conversation history is not enough.
-- Use forget when the user asks to forget or remove a saved fact. Query the kind of fact (e.g. "user's name"), not just a name or keyword.
-- Use update when the user corrects or changes a saved fact. Query the kind of fact; text is the new "The user ..." sentence. If nothing was saved yet, use remember instead.
-- Do not use tools to recall what the user just said or what you already answered.
-- Do not use tools for general knowledge or everyday how-tos unless the user asks for something current from the web.
-- Only state facts from tools or history. Do not invent details.
-- Long-term memories are about the user. Speak to them as "you". Never invent other people from names in memory.
-- Answer only the latest user question. Do not mix in older topics unless they ask about them.
+Tools (order: history → recall → web_search):
+- recall: saved personal facts (name, location, prefs) when history lacks them. Query the kind of fact (e.g. "user's location").
+- web_search: live facts only (weather, news, scores). Specific time-aware queries. Never "my location", "near me", or similar.
+- If the user means "here" / no city named: recall location first, then web_search with that city.
+- remember: durable "The user ..." facts. Not every turn.
+- forget / update: query the kind of fact; update text is the new "The user ..." sentence. No match on update → remember instead.
+- Do not tool-call for what was just said, or for general knowledge unless they want something current from the web.
+
+Evidence (unbreakable):
+- Only state facts from tools or history. No inventing details, numbers, names, scores, or dates.
+- After web_search: answer only from that result. Empty/weak/conflict → say you could not find a clear answer.
+- After remember/update/forget: quote only the text after Saved:, Already saved:, Updated to:, or Forgotten:. Not the transcript. Cancelled/not found → nothing changed.
+- Long-term memories are about the user ("you"). Never invent other people from names in memory.
 
 Response style (unbreakable):
-- Conversational, 2-4 sentences.
-- Plain text only: letters, numbers, and punctuation.
-- No markdown, code blocks, bullet points, tables, or URLs.
+- Conversational, 2-4 sentences. Plain text only. No markdown, code, bullets, tables, or URLs.
 """
 
 class Computah:
@@ -168,17 +167,18 @@ class Computah:
                 content=[{"type": "text", "text": input}],
             ),
         ]
+        # Keep calling tools until the model answers, or we hit max_tool_rounds.
         for _ in range(self.max_tool_rounds):
             response = self.model.generate(
                 messages,
                 tools=self.tools,
                 tool_choice="auto",
             )
-            # Model answered without tools
             if not response.tool_calls:
                 return response.content or ""
 
-            success = False
+            # Run every tool in this round, append results, then loop so the
+            # model can call another tool (e.g. recall → web_search).
             for tool_call in response.tool_calls:
                 name = tool_call.function.name
                 args = tool_call.function.arguments
@@ -189,11 +189,9 @@ class Computah:
                     args = json.loads(args) if args else {}
                 try:
                     result = self.tool_fns[name](**args)
-                    success = True
                 except Exception as e:
                     print(f"[Agent] Error using tool {name}: {e}")
                     result = f"Error using tool {name}: {e}"
-                    success = False
 
                 messages.append(
                     ChatMessage(
@@ -204,13 +202,7 @@ class Computah:
                         }],
                     )
                 )
-                # First good result is enough — go answer
-                if success:
-                    break
 
-            if success:
-                break
-
-        # Final reply from whatever we have (tool results or exhausted retries)
+        # Cap hit — force a final answer with whatever tool results we have.
         response = self.model.generate(messages)
         return response.content or ""

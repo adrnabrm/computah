@@ -11,10 +11,10 @@ import chromadb
 from chromadb.utils.embedding_functions import GoogleGeminiEmbeddingFunction
 
 class LongTermMemoryMessage(str, Enum):
-    SAVED = "Saved."
-    ALREADY_SAVED = "Already saved."
-    FORGOTTEN = "Forgotten."
-    UPDATED = "Updated."
+    SAVED = "Saved:"
+    ALREADY_SAVED = "Already saved:"
+    FORGOTTEN = "Forgotten:"
+    UPDATED = "Updated to:"
     CANCELLED = "Cancelled. Nothing was changed."
     NO_MEMORIES = "No memories found."
     NOT_FOUND = "Memory not found. Nothing was changed."
@@ -41,13 +41,17 @@ RECALL_TOOL = {
     "type": "function",
     "function": {
         "name": "recall",
-        "description": "Search long-term memories for facts that may answer the user. Use when conversation history is not enough.",
+        "description": (
+            "Search saved long-term memories for personal facts (name, location, preferences, people, projects). "
+            "Use when conversation history is not enough. "
+            "Call this before web_search when you need a saved personal detail to answer or to build a search query."
+        ),
         "parameters": {
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "Short search query for the memory to find",
+                    "description": "Kind of fact to find, e.g. 'user's location', 'user's name'",
                 }
             },
             "required": ["query"],
@@ -128,12 +132,12 @@ class LongTermMemory:
             if self._verbose:
                 print(f"[LongTermMemory] dedupe text={text!r} doc={doc!r} distance={distance}")
             if doc.strip().lower() == text.strip().lower() or distance < self.duplicate_threshold:
-                return LongTermMemoryMessage.ALREADY_SAVED.value
+                return f"{LongTermMemoryMessage.ALREADY_SAVED.value} {doc}"
 
         self.collection.add(documents=[text], ids=[str(uuid.uuid4())])
         if self._verbose:
             print(f"[LongTermMemory] remember text={text!r}")
-        return LongTermMemoryMessage.SAVED.value
+        return f"{LongTermMemoryMessage.SAVED.value} {text}"
 
     def recall(self, query: str) -> str:
         """ Recall information from persistent memory based on a query. """
@@ -189,14 +193,14 @@ class LongTermMemory:
         match = self.find_closest(query)
         if not match:
             return LongTermMemoryMessage.NOT_FOUND.value
-        memory_id, _ = match
+        memory_id, doc = match
         self.delete(memory_id)
-        return LongTermMemoryMessage.FORGOTTEN.value
+        return f"{LongTermMemoryMessage.FORGOTTEN.value} {doc}"
 
     def update(self, query: str, text: str) -> str:
         """Forget the closest match, then remember the new text."""
         result = self.forget(query)
-        if result != LongTermMemoryMessage.FORGOTTEN.value:
+        if not result.startswith(LongTermMemoryMessage.FORGOTTEN.value):
             return result
         self.remember(text)
-        return LongTermMemoryMessage.UPDATED.value
+        return f"{LongTermMemoryMessage.UPDATED.value} {text}"

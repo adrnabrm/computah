@@ -5,6 +5,8 @@ import wavio
 import numpy as np
 import asyncio
 import os
+import signal
+import threading
 import wave
 from livekit.wakeword import WakeWordModel, WakeWordListener
 from piper import PiperVoice
@@ -38,12 +40,36 @@ class AudioHandler:
     
     def listen_for_wakeword(self) -> bool:
         """Listen for the wakeword and return True if detected, False otherwise."""
+        # PyAudio read runs in a thread; Ctrl+C often never reaches asyncio.wait.
+        # SIGINT sets a flag; we poll that flag without cancelling wait_for_detection
+        # (cancelling it orphans queue waiters and eats detections).
+        stop = threading.Event()
+
+        def _on_sigint(signum, frame):
+            stop.set()
+
         async def _listen_for_wakeword():
             async with WakeWordListener(self.wakeword_model, threshold=0.1) as listener:
                 print("[Audio] Listening for wakeword...")
-                return await listener.wait_for_detection()
-            
-        return asyncio.run(_listen_for_wakeword())
+                task = asyncio.create_task(listener.wait_for_detection())
+                while not stop.is_set():
+                    if task.done():
+                        await task
+                        return True
+                    await asyncio.sleep(0.2)
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, RuntimeError):
+                    pass
+            raise KeyboardInterrupt
+
+        prev = signal.getsignal(signal.SIGINT)
+        signal.signal(signal.SIGINT, _on_sigint)
+        try:
+            return asyncio.run(_listen_for_wakeword())
+        finally:
+            signal.signal(signal.SIGINT, prev)
     
     def speak(self, input: str) -> None:
         """Speak the input to the user."""
