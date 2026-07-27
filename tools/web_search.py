@@ -14,16 +14,17 @@ WEB_SEARCH_TOOL = {
     "function": {
         "name": "web_search",
         "description": (
-            "Search the web for current information (news, weather, scores, live facts). "
-            "Use a specific, time-aware query. Returns titles, urls, snippets, and fetched page text. "
-            "Not for conversation history or general knowledge."
+            "Search the web for live facts (news, weather, scores, current events). "
+            "Query must include a real place, person, or subject — not vague phrases. "
+            "If you need a saved personal detail to form the query, call recall first. "
+            "Not for conversation history, personal memory, or general knowledge."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "Specific search query, preferably time-aware",
+                    "description": "Specific time-aware search query with a concrete place or subject",
                 }
             },
             "required": ["query"],
