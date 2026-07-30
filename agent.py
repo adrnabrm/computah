@@ -6,7 +6,6 @@ from smolagents.models import MessageRole
 
 from tools.longterm_mem import (
     FORGET_TOOL,
-    RECALL_TOOL,
     REMEMBER_TOOL,
     UPDATE_TOOL,
     LongTermMemory,
@@ -23,23 +22,23 @@ LONG_TERM_MEMORY_PATH = os.getenv("LONG_TERM_MEMORY_PATH", "data/chroma")
 TOOL_RESULT_LABELS = {
     "web_search": "WebSearch",
     "remember": "LongTermMemory",
-    "recall": "LongTermMemory",
     "forget": "LongTermMemory",
     "update": "LongTermMemory",
 }
 SYSTEM_PROMPT = """
 You are a voice assistant. Answer only the latest user question. Use conversation history when it is enough.
 
-Tools (order: history → recall → web_search):
-- recall: saved personal facts (name, location, prefs) when history lacks them. Query the kind of fact (e.g. "user's location").
+Saved personal facts may appear under [Known about the user]. Use them for name, location, prefs, and to fill place names in web_search.
+
+Tools:
 - web_search: live facts only (weather, news, scores). Specific time-aware queries. Never "my location", "near me", or similar.
-- If the user means "here" / no city named: recall location first, then web_search with that city.
+- If the user means "here" / no city named: use location from [Known about the user], then web_search with that city.
 - remember: durable "The user ..." facts. Not every turn.
 - forget / update: query the kind of fact; update text is the new "The user ..." sentence. No match on update → remember instead.
 - Do not tool-call for what was just said, or for general knowledge unless they want something current from the web.
 
 Evidence (unbreakable):
-- Only state facts from tools or history. No inventing details, numbers, names, scores, or dates.
+- Only state facts from [Known about the user], tools, or history. No inventing details, numbers, names, scores, or dates.
 - After web_search: answer only from that result. Empty/weak/conflict → say you could not find a clear answer.
 - After remember/update/forget: quote only the text after Saved:, Already saved:, Updated to:, or Forgotten:. Not the transcript. Cancelled/not found → nothing changed.
 - Long-term memories are about the user ("you"). Never invent other people from names in memory.
@@ -66,11 +65,10 @@ class Computah:
             self.web_search = WebSearch(verbose=True)
 
             # Initialize the tools
-            self.tools = [WEB_SEARCH_TOOL, REMEMBER_TOOL, RECALL_TOOL, FORGET_TOOL, UPDATE_TOOL]
+            self.tools = [WEB_SEARCH_TOOL, REMEMBER_TOOL, FORGET_TOOL, UPDATE_TOOL]
             self.tool_fns = {
                 "web_search": self.web_search.search,
                 "remember": self.long_term.remember,
-                "recall": self.long_term.recall,
                 "forget": self._forget,
                 "update": self._update,
             }
@@ -167,6 +165,19 @@ class Computah:
                 content=[{"type": "text", "text": input}],
             ),
         ]
+
+        recalled = self.long_term.recall(input)
+        if recalled != LongTermMemoryMessage.NO_MEMORIES.value:
+            messages.append(
+                ChatMessage(
+                    role=MessageRole.USER,
+                    content=[{
+                        "type": "text",
+                        "text": f"[Known about the user]\n{recalled}",
+                    }],
+                )
+            )
+
         # Keep calling tools until the model answers, or we hit max_tool_rounds.
         for _ in range(self.max_tool_rounds):
             response = self.model.generate(
@@ -178,7 +189,7 @@ class Computah:
                 return response.content or ""
 
             # Run every tool in this round, append results, then loop so the
-            # model can call another tool (e.g. recall → web_search).
+            # model can call another tool (e.g. remember → web_search).
             for tool_call in response.tool_calls:
                 name = tool_call.function.name
                 args = tool_call.function.arguments

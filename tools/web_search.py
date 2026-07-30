@@ -16,7 +16,7 @@ WEB_SEARCH_TOOL = {
         "description": (
             "Search the web for live facts (news, weather, scores, current events). "
             "Query must include a real place, person, or subject — not vague phrases. "
-            "If you need a saved personal detail to form the query, call recall first. "
+            "If you need a saved personal detail (e.g. city), use [Known about the user]. "
             "Not for conversation history, personal memory, or general knowledge."
         ),
         "parameters": {
