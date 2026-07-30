@@ -37,6 +37,28 @@ REMEMBER_TOOL = {
     },
 }
 
+RECALL_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "recall",
+        "description": (
+            "Search saved long-term memories for personal facts (name, location, preferences, people, projects). "
+            "Use when conversation history is not enough. "
+            "Call this before web_search when you need a saved personal detail to answer or to build a search query."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Kind of fact to find, e.g. 'user's location', 'user's name'",
+                }
+            },
+            "required": ["query"],
+        },
+    },
+}
+
 FORGET_TOOL = {
     "type": "function",
     "function": {

@@ -67,9 +67,18 @@ class AudioHandler:
         prev = signal.getsignal(signal.SIGINT)
         signal.signal(signal.SIGINT, _on_sigint)
         try:
-            return asyncio.run(_listen_for_wakeword())
+            detected = asyncio.run(_listen_for_wakeword())
+            if detected:
+                self._play_tone(880, 0.08)
+            return detected
         finally:
             signal.signal(signal.SIGINT, prev)
+
+    def _play_tone(self, freq: float, duration: float = 0.08, fs: int = 16000) -> None:
+        t = np.linspace(0, duration, int(fs * duration), endpoint=False)
+        tone = (0.25 * np.sin(2 * np.pi * freq * t)).astype(np.float32)
+        sd.play(tone, fs)
+        sd.wait()
     
     def speak(self, input: str) -> None:
         """Speak the input to the user."""
@@ -126,6 +135,8 @@ class AudioHandler:
         if not frames:
             print("[Audio] No audio captured")
             return
+
+        self._play_tone(660, 0.08, fs=fs)
 
         # Concatenate all frames into a single numpy array
         recording = np.concatenate(frames, axis=0)
